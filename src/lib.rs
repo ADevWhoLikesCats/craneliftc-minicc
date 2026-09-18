@@ -226,6 +226,9 @@ Software.
 use std::ffi::{c_char, CString};
 
 use cranelift::codegen::ir::{entities::JumpTable, types::*, FuncRef, Function, TrapCode, UserFuncName};
+use cranelift::codegen::ir::entities::StackSlot;
+use cranelift::codegen::ir::MemFlags;
+use cranelift::codegen::ir::stackslot::{StackSlotData, StackSlotKind};
 use cranelift::codegen::verifier::verify_function;
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::settings::{self, Builder, Flags};
@@ -289,6 +292,8 @@ pub struct CValue(u32);
 pub struct CInst(u32);
 #[repr(transparent)]
 pub struct CFuncRef(u32);
+#[repr(transparent)]
+pub struct CStackSlot(u32);
 #[repr(transparent)]
 pub struct CJumpTable(u32);
 
@@ -1231,4 +1236,85 @@ pub extern "C" fn CL_FunctionBuilder_inst_results(
         out_slice[i] = CValue(results[i].as_u32());
     }
     n
+}
+
+/* ─────────────  Rungs 8-10: memory  ───────────── */
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_create_sized_stack_slot(
+    builder: *mut FunctionBuilder,
+    size: u32,
+) -> CStackSlot {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let data = StackSlotData::new(StackSlotKind::ExplicitSlot, size);
+    let slot = ubuilder.create_sized_stack_slot(data);
+    CStackSlot(slot.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_stack_addr(
+    builder: *mut FunctionBuilder,
+    ty: CType,
+    slot: CStackSlot,
+    offset: i32,
+) -> CValue {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let result = ubuilder
+        .ins()
+        .stack_addr(convert_CType(ty), StackSlot::from_u32(slot.0), offset);
+    CValue(result.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_load(
+    builder: *mut FunctionBuilder,
+    ty: CType,
+    addr: CValue,
+    offset: i32,
+) -> CValue {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let flags = MemFlags::new();
+    let result = ubuilder
+        .ins()
+        .load(convert_CType(ty), flags, Value::from_u32(addr.0), offset);
+    CValue(result.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_store(
+    builder: *mut FunctionBuilder,
+    addr: CValue,
+    value: CValue,
+    offset: i32,
+) -> CInst {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let flags = MemFlags::new();
+    let inst = ubuilder
+        .ins()
+        .store(flags, Value::from_u32(value.0), Value::from_u32(addr.0), offset);
+    CInst(inst.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_bitcast(
+    builder: *mut FunctionBuilder,
+    to_ty: CType,
+    val: CValue,
+) -> CValue {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let flags = MemFlags::new();
+    let result = ubuilder
+        .ins()
+        .bitcast(convert_CType(to_ty), flags, Value::from_u32(val.0));
+    CValue(result.as_u32())
 }
