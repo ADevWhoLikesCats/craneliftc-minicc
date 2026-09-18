@@ -7,19 +7,6 @@
 #include <stdlib.h>
 #include "craneliftc_extra.h"
 
-typedef enum CCallConv {
-  Fast,
-  Cold,
-  Tail,
-  SystemV,
-  WindowsFastcall,
-  AppleAarch64,
-  Probestack,
-  WasmtimeSystemV,
-  WasmtimeFastcall,
-  WasmtimeAppleAarch64,
-} CCallConv;
-
 typedef enum CType {
   I8,
   I16,
@@ -45,6 +32,19 @@ typedef enum CType {
   F32X16,
   F64X8,
 } CType;
+
+typedef enum CCallConv {
+  Fast,
+  Cold,
+  Tail,
+  SystemV,
+  WindowsFastcall,
+  AppleAarch64,
+  Probestack,
+  WasmtimeSystemV,
+  WasmtimeFastcall,
+  WasmtimeAppleAarch64,
+} CCallConv;
 
 typedef uint32_t CBlock;
 
@@ -403,3 +403,11 @@ CInst CL_FunctionBuilder_brif(FunctionBuilder *builder,
                               CBlock block_two_label,
                               CValue *block_two_args,
                               size_t two_len);
+
+ObjectModule *CL_ObjectModule_new(const char *module_name);
+
+uint32_t CL_ObjectModule_declare_function(ObjectModule *module, const char *name, Signature *sig);
+
+void CL_ObjectModule_define_function(ObjectModule *module, uint32_t func_id, Function *func);
+
+int32_t CL_ObjectModule_finish_and_emit(ObjectModule *module, const char *path);

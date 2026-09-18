@@ -8,3 +8,4 @@ typedef struct Signature Signature;
 typedef struct FunctionBuilderContext FunctionBuilderContext;
 typedef struct Function Function;
 typedef struct Variable Variable;
+typedef struct ObjectModule ObjectModule;
