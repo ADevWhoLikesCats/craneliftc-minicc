@@ -1,5 +1,6 @@
 use cranelift::prelude::Configurable;
 use cranelift::codegen::Context;
+
 /*
 
                                  Apache License
@@ -224,7 +225,7 @@ Software.
 
 use std::ffi::{c_char, CString};
 
-use cranelift::codegen::ir::{entities::JumpTable, types::*, Function, TrapCode, UserFuncName};
+use cranelift::codegen::ir::{entities::JumpTable, types::*, FuncRef, Function, TrapCode, UserFuncName};
 use cranelift::codegen::verifier::verify_function;
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::settings::{self, Builder, Flags};
@@ -1173,4 +1174,61 @@ pub extern "C" fn CL_ObjectModule_finish_and_emit(
     let cpath = unsafe { CStr::from_ptr(path) }.to_str().unwrap();
     std::fs::write(cpath, bytes).unwrap();
     0
+}
+
+
+/* ─────────────  Rung 5: function calls  ───────────── */
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_ObjectModule_declare_func_in_func(
+    module: *mut ObjectModule,
+    func_id: u32,
+    builder: *mut FunctionBuilder,
+) -> CFuncRef {
+    assert!(!module.is_null());
+    assert!(!builder.is_null());
+    let m = unsafe { &mut *module };
+    let ubuilder = unsafe { &mut *builder };
+    let func_ref = m.declare_func_in_func(
+        cranelift_module::FuncId::from_u32(func_id),
+        &mut ubuilder.func,
+    );
+    CFuncRef(func_ref.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_call(
+    builder: *mut FunctionBuilder,
+    func_ref: CFuncRef,
+    args: *mut CValue,
+    nargs: usize,
+) -> CInst {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let slice = unsafe { core::slice::from_raw_parts(args, nargs) };
+    let vals: Vec<Value> = slice.iter().map(|v| Value::from_u32(v.0)).collect();
+    let inst = ubuilder.ins().call(FuncRef::from_u32(func_ref.0), &vals);
+    CInst(inst.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_inst_results(
+    builder: *mut FunctionBuilder,
+    inst: CInst,
+    out: *mut CValue,
+    out_capacity: usize,
+) -> usize {
+    assert!(!builder.is_null());
+    assert!(!out.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let results = ubuilder.inst_results(cranelift::codegen::ir::Inst::from_u32(inst.0));
+    let n = core::cmp::min(results.len(), out_capacity);
+    let out_slice = unsafe { core::slice::from_raw_parts_mut(out, out_capacity) };
+    for i in 0..n {
+        out_slice[i] = CValue(results[i].as_u32());
+    }
+    n
 }
