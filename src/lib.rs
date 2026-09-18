@@ -295,7 +295,10 @@ pub struct CFuncRef(u32);
 #[repr(transparent)]
 pub struct CStackSlot(u32);
 #[repr(transparent)]
+pub struct CDataId(u32);
+#[repr(transparent)]
 pub struct CJumpTable(u32);
+
 
 #[repr(C)]
 pub enum CCallConv {
@@ -1127,7 +1130,7 @@ instr_one_value_inst!(set_pinned_reg);
 // (value, block, svalue, block, svalue) -> inst
 instr_five_value_block_svalue_block_svalue_inst!(brif);
 
-use cranelift_module::{Linkage, Module};
+use cranelift_module::{DataDescription, DataId, Linkage, Module};  
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use std::ffi::CStr;
 
@@ -1317,4 +1320,58 @@ pub extern "C" fn CL_FunctionBuilder_bitcast(
         .ins()
         .bitcast(convert_CType(to_ty), flags, Value::from_u32(val.0));
     CValue(result.as_u32())
+}
+
+
+/* ─────────────  Rung 12: data section  ───────────── */
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_ObjectModule_declare_data(
+    module: *mut ObjectModule,
+    name: *const c_char,
+    writable: bool,
+) -> CDataId {
+    assert!(!module.is_null());
+    assert!(!name.is_null());
+    let m = unsafe { &mut *module };
+    let cname = unsafe { CStr::from_ptr(name) }.to_str().unwrap();
+    let data_id = m.declare_data(cname, Linkage::Export, writable, false).unwrap();
+    CDataId(data_id.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_ObjectModule_define_data(
+    module: *mut ObjectModule,
+    data_id: CDataId,
+    bytes: *const u8,
+    len: usize,
+) -> () {
+    assert!(!module.is_null());
+    let m = unsafe { &mut *module };
+    let mut desc = DataDescription::new();
+    let slice: &[u8] = if len == 0 {
+        &[]
+    } else {
+        unsafe { core::slice::from_raw_parts(bytes, len) }
+    };
+    desc.define(slice.to_vec().into_boxed_slice());
+    m.define_data(DataId::from_u32(data_id.0), &desc).unwrap();
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_ObjectModule_global_value(
+    module: *mut ObjectModule,
+    data_id: CDataId,
+    builder: *mut FunctionBuilder,
+) -> CValue {
+    assert!(!module.is_null());
+    assert!(!builder.is_null());
+    let m = unsafe { &mut *module };
+    let ubuilder = unsafe { &mut *builder };
+    let gv = m.declare_data_in_func(DataId::from_u32(data_id.0), &mut ubuilder.func);
+    let addr = ubuilder.ins().global_value(cranelift::prelude::types::I64, gv);
+    CValue(addr.as_u32())
 }
