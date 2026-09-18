@@ -1,0 +1,12 @@
+craneliftc (fork)
+Copyright 2025 Your Name
+
+Based on craneliftc by the original craneliftc authors
+(https://github.com/coffeebe4code/craneliftc)
+Copyright 2023 The craneliftc Authors
+Licensed under the Apache License, Version 2.0.
+
+Modifications in this fork:
+  - Added ObjectModule bindings (CL_ObjectModule_*)
+  - Pinned all cranelift crates to version 0.96.4
+  - Added ObjectModule forward declaration to craneliftc_extra.h
