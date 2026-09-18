@@ -229,8 +229,8 @@ use cranelift::codegen::verifier::verify_function;
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::settings::{self, Builder, Flags};
 use cranelift::prelude::{
-    AbiParam, Block, FunctionBuilder, FunctionBuilderContext, Imm64, InstBuilder, Signature, Value,
-    Variable,
+    AbiParam, Block, FunctionBuilder, FunctionBuilderContext, Imm64, InstBuilder, IntCC, Signature,
+    Value, Variable,
 };
 
 #[repr(C)]
@@ -304,6 +304,21 @@ pub enum CCallConv {
     WasmtimeFastcall,
     WasmtimeAppleAarch64,
 }
+
+#[repr(C)]
+pub enum CIntCC {
+    Equal,
+    NotEqual,
+    SignedLessThan,
+    SignedGreaterThanOrEqual,
+    SignedGreaterThan,
+    SignedLessThanOrEqual,
+    UnsignedLessThan,
+    UnsignedGreaterThanOrEqual,
+    UnsignedGreaterThan,
+    UnsignedLessThanOrEqual,
+}
+
 macro_rules! easy_type {
     ($val:ident, $typ:ident, $($variant:ident,)*) => {
         match $val {
@@ -355,6 +370,23 @@ fn convert_CCallConv(ccd: CCallConv) -> CallConv {
         WasmtimeAppleAarch64,
     );
 }
+
+#[allow(non_snake_case)]
+fn convert_CIntCC(cc: CIntCC) -> IntCC {
+    match cc {
+        CIntCC::Equal => IntCC::Equal,
+        CIntCC::NotEqual => IntCC::NotEqual,
+        CIntCC::SignedLessThan => IntCC::SignedLessThan,
+        CIntCC::SignedGreaterThanOrEqual => IntCC::SignedGreaterThanOrEqual,
+        CIntCC::SignedGreaterThan => IntCC::SignedGreaterThan,
+        CIntCC::SignedLessThanOrEqual => IntCC::SignedLessThanOrEqual,
+        CIntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
+        CIntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+        CIntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThan,
+        CIntCC::UnsignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
+    }
+}
+
 
 #[allow(non_snake_case)]
 fn convert_CTrapCode(ctc: CTrapCode) -> TrapCode {
@@ -1039,11 +1071,27 @@ instr_two_value_value_value!(iadd_pairwise);
 instr_two_value_value_value!(x86_pmaddubsw);
 instr_two_value_value_value!(iconcat);
 
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_icmp(
+    builder: *mut FunctionBuilder,
+    cc: CIntCC,
+    left: CValue,
+    right: CValue,
+) -> CValue {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let result = ubuilder
+        .ins()
+        .icmp(convert_CIntCC(cc), Value::from_u32(left.0), Value::from_u32(right.0));
+    CValue(result.as_u32())
+}
+
 // (value) -> value
 instr_one_value_value!(ineg);
 instr_one_value_value!(iabs);
-instr_one_value_value!(vany_true);
-instr_one_value_value!(vall_true);
+
+// (value) -> value
 instr_one_value_value!(bnot);
 instr_one_value_value!(bitrev);
 instr_one_value_value!(clz);
