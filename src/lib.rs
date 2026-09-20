@@ -233,8 +233,8 @@ use cranelift::codegen::verifier::verify_function;
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::settings::{self, Builder, Flags};
 use cranelift::prelude::{
-    AbiParam, Block, FunctionBuilder, FunctionBuilderContext, Imm64, InstBuilder, IntCC, Signature,
-    Value, Variable,
+    AbiParam, Block, FloatCC, FunctionBuilder, FunctionBuilderContext, Imm64, InstBuilder, IntCC,
+    Signature, Value, Variable,
 };
 
 #[repr(C)]
@@ -316,16 +316,34 @@ pub enum CCallConv {
 
 #[repr(C)]
 pub enum CIntCC {
-    Equal,
-    NotEqual,
-    SignedLessThan,
-    SignedGreaterThanOrEqual,
-    SignedGreaterThan,
-    SignedLessThanOrEqual,
-    UnsignedLessThan,
-    UnsignedGreaterThanOrEqual,
-    UnsignedGreaterThan,
-    UnsignedLessThanOrEqual,
+    CIntEqual,
+    CIntNotEqual,
+    CIntSignedLessThan,
+    CIntSignedGreaterThanOrEqual,
+    CIntSignedGreaterThan,
+    CIntSignedLessThanOrEqual,
+    CIntUnsignedLessThan,
+    CIntUnsignedGreaterThanOrEqual,
+    CIntUnsignedGreaterThan,
+    CIntUnsignedLessThanOrEqual,
+}
+
+#[repr(C)]
+pub enum CFloatCC {
+    CFloatOrdered,
+    CFloatUnordered,
+    CFloatEqual,
+    CFloatNotEqual,
+    CFloatOrderedNotEqual,
+    CFloatUnorderedOrEqual,
+    CFloatLessThan,
+    CFloatLessThanOrEqual,
+    CFloatGreaterThan,
+    CFloatGreaterThanOrEqual,
+    CFloatUnorderedOrLessThan,
+    CFloatUnorderedOrLessThanOrEqual,
+    CFloatUnorderedOrGreaterThan,
+    CFloatUnorderedOrGreaterThanOrEqual,
 }
 
 macro_rules! easy_type {
@@ -383,19 +401,38 @@ fn convert_CCallConv(ccd: CCallConv) -> CallConv {
 #[allow(non_snake_case)]
 fn convert_CIntCC(cc: CIntCC) -> IntCC {
     match cc {
-        CIntCC::Equal => IntCC::Equal,
-        CIntCC::NotEqual => IntCC::NotEqual,
-        CIntCC::SignedLessThan => IntCC::SignedLessThan,
-        CIntCC::SignedGreaterThanOrEqual => IntCC::SignedGreaterThanOrEqual,
-        CIntCC::SignedGreaterThan => IntCC::SignedGreaterThan,
-        CIntCC::SignedLessThanOrEqual => IntCC::SignedLessThanOrEqual,
-        CIntCC::UnsignedLessThan => IntCC::UnsignedLessThan,
-        CIntCC::UnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
-        CIntCC::UnsignedGreaterThan => IntCC::UnsignedGreaterThan,
-        CIntCC::UnsignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
+        CIntCC::CIntEqual => IntCC::Equal,
+        CIntCC::CIntNotEqual => IntCC::NotEqual,
+        CIntCC::CIntSignedLessThan => IntCC::SignedLessThan,
+        CIntCC::CIntSignedGreaterThanOrEqual => IntCC::SignedGreaterThanOrEqual,
+        CIntCC::CIntSignedGreaterThan => IntCC::SignedGreaterThan,
+        CIntCC::CIntSignedLessThanOrEqual => IntCC::SignedLessThanOrEqual,
+        CIntCC::CIntUnsignedLessThan => IntCC::UnsignedLessThan,
+        CIntCC::CIntUnsignedGreaterThanOrEqual => IntCC::UnsignedGreaterThanOrEqual,
+        CIntCC::CIntUnsignedGreaterThan => IntCC::UnsignedGreaterThan,
+        CIntCC::CIntUnsignedLessThanOrEqual => IntCC::UnsignedLessThanOrEqual,
     }
 }
 
+#[allow(non_snake_case)]
+fn convert_CFloatCC(cc: CFloatCC) -> FloatCC {
+    match cc {
+        CFloatCC::CFloatOrdered => FloatCC::Ordered,
+        CFloatCC::CFloatUnordered => FloatCC::Unordered,
+        CFloatCC::CFloatEqual => FloatCC::Equal,
+        CFloatCC::CFloatNotEqual => FloatCC::NotEqual,
+        CFloatCC::CFloatOrderedNotEqual => FloatCC::OrderedNotEqual,
+        CFloatCC::CFloatUnorderedOrEqual => FloatCC::UnorderedOrEqual,
+        CFloatCC::CFloatLessThan => FloatCC::LessThan,
+        CFloatCC::CFloatLessThanOrEqual => FloatCC::LessThanOrEqual,
+        CFloatCC::CFloatGreaterThan => FloatCC::GreaterThan,
+        CFloatCC::CFloatGreaterThanOrEqual => FloatCC::GreaterThanOrEqual,
+        CFloatCC::CFloatUnorderedOrLessThan => FloatCC::UnorderedOrLessThan,
+        CFloatCC::CFloatUnorderedOrLessThanOrEqual => FloatCC::UnorderedOrLessThanOrEqual,
+        CFloatCC::CFloatUnorderedOrGreaterThan => FloatCC::UnorderedOrGreaterThan,
+        CFloatCC::CFloatUnorderedOrGreaterThanOrEqual => FloatCC::UnorderedOrGreaterThanOrEqual,
+    }
+}
 
 #[allow(non_snake_case)]
 fn convert_CTrapCode(ctc: CTrapCode) -> TrapCode {
@@ -1373,5 +1410,54 @@ pub extern "C" fn CL_ObjectModule_global_value(
     let ubuilder = unsafe { &mut *builder };
     let gv = m.declare_data_in_func(DataId::from_u32(data_id.0), &mut ubuilder.func);
     let addr = ubuilder.ins().global_value(cranelift::prelude::types::I64, gv);
+    CValue(addr.as_u32())
+}
+
+
+/* ─────────────  Rung 13: floats  ───────────── */
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_fcmp(
+    builder: *mut FunctionBuilder,
+    cc: CFloatCC,
+    left: CValue,
+    right: CValue,
+) -> CValue {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let result = ubuilder
+        .ins()
+        .fcmp(convert_CFloatCC(cc), Value::from_u32(left.0), Value::from_u32(right.0));
+    CValue(result.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_FunctionBuilder_unreachable(
+    builder: *mut FunctionBuilder,
+) -> CInst {
+    assert!(!builder.is_null());
+    let ubuilder = unsafe { &mut *builder };
+    let inst = ubuilder.ins().trap(cranelift::codegen::ir::TrapCode::UnreachableCodeReached);
+    CInst(inst.as_u32())
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "C" fn CL_ObjectModule_func_addr(
+    module: *mut ObjectModule,
+    func_id: u32,
+    builder: *mut FunctionBuilder,
+) -> CValue {
+    assert!(!module.is_null());
+    assert!(!builder.is_null());
+    let m = unsafe { &mut *module };
+    let ubuilder = unsafe { &mut *builder };
+    let func_ref = m.declare_func_in_func(
+        cranelift_module::FuncId::from_u32(func_id),
+        &mut ubuilder.func,
+    );
+    let addr = ubuilder.ins().func_addr(cranelift::prelude::types::I64, func_ref);
     CValue(addr.as_u32())
 }

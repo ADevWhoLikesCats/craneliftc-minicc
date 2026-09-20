@@ -47,17 +47,34 @@ typedef enum CCallConv {
 } CCallConv;
 
 typedef enum CIntCC {
-  Equal,
-  NotEqual,
-  SignedLessThan,
-  SignedGreaterThanOrEqual,
-  SignedGreaterThan,
-  SignedLessThanOrEqual,
-  UnsignedLessThan,
-  UnsignedGreaterThanOrEqual,
-  UnsignedGreaterThan,
-  UnsignedLessThanOrEqual,
+  CIntEqual,
+  CIntNotEqual,
+  CIntSignedLessThan,
+  CIntSignedGreaterThanOrEqual,
+  CIntSignedGreaterThan,
+  CIntSignedLessThanOrEqual,
+  CIntUnsignedLessThan,
+  CIntUnsignedGreaterThanOrEqual,
+  CIntUnsignedGreaterThan,
+  CIntUnsignedLessThanOrEqual,
 } CIntCC;
+
+typedef enum CFloatCC {
+  CFloatOrdered,
+  CFloatUnordered,
+  CFloatEqual,
+  CFloatNotEqual,
+  CFloatOrderedNotEqual,
+  CFloatUnorderedOrEqual,
+  CFloatLessThan,
+  CFloatLessThanOrEqual,
+  CFloatGreaterThan,
+  CFloatGreaterThanOrEqual,
+  CFloatUnorderedOrLessThan,
+  CFloatUnorderedOrLessThanOrEqual,
+  CFloatUnorderedOrGreaterThan,
+  CFloatUnorderedOrGreaterThanOrEqual,
+} CFloatCC;
 
 typedef uint32_t CBlock;
 
@@ -469,3 +486,12 @@ void CL_ObjectModule_define_data(ObjectModule *module,
 CValue CL_ObjectModule_global_value(ObjectModule *module,
                                     CDataId data_id,
                                     FunctionBuilder *builder);
+
+CValue CL_FunctionBuilder_fcmp(FunctionBuilder *builder,
+                               enum CFloatCC cc,
+                               CValue left,
+                               CValue right);
+
+CInst CL_FunctionBuilder_unreachable(FunctionBuilder *builder);
+
+CValue CL_ObjectModule_func_addr(ObjectModule *module, uint32_t func_id, FunctionBuilder *builder);
